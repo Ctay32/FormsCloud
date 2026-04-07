@@ -4,23 +4,6 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["cdg1", "iad1"],
-  "env": [
-    {
-      "key": "NEXT_PUBLIC_SUPABASE_URL",
-      "description": "URL publique de Supabase",
-      "value": ""
-    },
-    {
-      "key": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      "description": "Clé anonyme publique de Supabase",
-      "value": ""
-    },
-    {
-      "key": "SUPABASE_SERVICE_KEY",
-      "description": "Clé de service Supabase (privée)",
-      "value": ""
-    }
-  ],
   "functions": {
     "pages/api/*.js": {
       "memory": 1024,
