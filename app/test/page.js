@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { formsApi } from '../lib/api-temp'
+import { formsApi } from '../lib/api'
 
 export default function TestPage() {
   const [logs, setLogs] = useState([])
