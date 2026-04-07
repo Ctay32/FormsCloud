@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { shareApi } from '../lib/share-temp'
+import { shareApi } from '../lib/share'
 
 export default function ShareModal({ form, isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('link')
