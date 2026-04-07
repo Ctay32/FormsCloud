@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { formsApi } from '../../lib/api-temp'
-import { shareApi } from '../../lib/share-temp'
+import { formsApi } from '../../lib/api'
+import { shareApi } from '../../lib/share'
 
 export default function SharePage({ params }) {
   const [form, setForm] = useState(null)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { formsApi, responsesApi } from '../../lib/api-temp'
+import { formsApi, responsesApi } from '../../lib/api'
 
 export default function FormPage({ params }) {
   const [form, setForm] = useState(null)
