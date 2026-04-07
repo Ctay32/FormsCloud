@@ -3,7 +3,7 @@
   "devCommand": "next dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["cdg1", "iad1"],
+  "regions": ["iad1"],
   "functions": {
     "pages/api/*.js": {
       "memory": 1024,
