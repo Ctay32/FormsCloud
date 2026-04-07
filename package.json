@@ -1,0 +1,30 @@
+{
+  "name": "formcloud",
+  "version": "1.0.0",
+  "description": "FormCloud application with Supabase backend",
+  "main": "lib/index.js",
+  "scripts": {
+    "start": "node lib/index.js",
+    "dev": "node --watch lib/index.js",
+    "test": "node lib/test.js",
+    "next": "next",
+    "next-dev": "next dev",
+    "next-build": "next build",
+    "next-start": "next start",
+    "vercel-build": "next build",
+    "vercel-dev": "next dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "dotenv": "^16.4.5",
+    "next": "^16.2.2",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.0.0",
+    "nodemon": "^3.1.0",
+    "postcss": "^8.0.0",
+    "tailwindcss": "^3.0.0"
+  }
+}
