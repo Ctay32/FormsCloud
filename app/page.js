@@ -4,27 +4,60 @@ import { useState, useEffect } from 'react'
 import FormCard from './components/FormCard'
 import Link from 'next/link'
 import { formsApi, responsesApi } from './lib/api'
+import { auth } from './lib/auth'
 import UserProfile from './components/UserProfile'
 import ShareModal from './components/ShareModal'
 
-export default function Dashboard() {
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [shareModal, setShareModal] = useState({ isOpen: false, form: null })
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
-    loadForms()
-  }, [])
+    // Écouter l'état d'authentification
+    let unsub = null;
+    const checkUser = async () => {
+      const currentUser = await auth.getCurrentUser();
+      setUser(currentUser);
+      if (currentUser) {
+        loadForms();
+      } else {
+        setLoading(false);
+      }
+    };
+    checkUser();
+    // Écoute les changements d'auth
+    unsub = auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        loadForms();
+      } else {
+        setUser(null);
+        setForms([]);
+        setLoading(false);
+      }
+    });
+    return () => {
+      if (unsub && unsub.data && unsub.data.subscription) {
+        unsub.data.subscription.unsubscribe();
+      }
+    };
+  }, []);
 
   const loadForms = async () => {
     try {
       setLoading(true)
       const data = await formsApi.getAll()
       setForms(data)
+      setError(null)
     } catch (err) {
-      console.error('Erreur lors du chargement des formulaires:', err)
-      setError('Impossible de charger les formulaires')
+      if (err.message === 'Utilisateur non connecté') {
+        setError('Vous devez être connecté pour voir vos formulaires.')
+      } else {
+        console.error('Erreur lors du chargement des formulaires:', err)
+        setError('Impossible de charger les formulaires')
+      }
     } finally {
       setLoading(false)
     }
