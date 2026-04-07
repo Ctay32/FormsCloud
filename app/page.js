@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import FormCard from './components/FormCard'
 import Link from 'next/link'
 import { formsApi, responsesApi } from './lib/api'
+import { useRouter } from 'next/navigation'
 import { auth } from './lib/auth'
 import UserProfile from './components/UserProfile'
 import ShareModal from './components/ShareModal'
@@ -13,6 +14,7 @@ import ShareModal from './components/ShareModal'
   const [error, setError] = useState(null)
   const [shareModal, setShareModal] = useState({ isOpen: false, form: null })
   const [user, setUser] = useState(null)
+  const router = useRouter();
 
   useEffect(() => {
     // Écouter l'état d'authentification
@@ -24,6 +26,8 @@ import ShareModal from './components/ShareModal'
         loadForms();
       } else {
         setLoading(false);
+        // Rediriger vers /auth si pas connecté
+        router.push('/auth');
       }
     };
     checkUser();
@@ -36,6 +40,7 @@ import ShareModal from './components/ShareModal'
         setUser(null);
         setForms([]);
         setLoading(false);
+        router.push('/auth');
       }
     });
     return () => {
@@ -121,6 +126,21 @@ import ShareModal from './components/ShareModal'
             >
               Réessayer
             </button>
+            {error === 'Vous devez être connecté pour voir vos formulaires.' ? (
+              <button
+                onClick={() => router.push('/auth')}
+                className="btn-primary"
+              >
+                Se connecter
+              </button>
+            ) : (
+              <button
+                onClick={loadForms}
+                className="btn-primary"
+              >
+                Réessayer
+              </button>
+            )}
           </div>
         </div>
       </div>
