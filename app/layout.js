@@ -1,4 +1,5 @@
 import './globals.css'
+import AdminShell from './components/AdminShell'
 
 export const metadata = {
   title: 'FormCloud',
@@ -9,9 +10,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="fr">
       <body className="font-sans">
-        <div className="min-h-screen bg-gray-50">
-          {children}
-        </div>
+        <AdminShell>{children}</AdminShell>
       </body>
     </html>
   )

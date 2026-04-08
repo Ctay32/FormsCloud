@@ -1,27 +1,61 @@
 import { supabase } from './supabase.js'
 import { auth } from './auth.js'
 
+const buildProfilePayload = (user, profile = {}) => ({
+  id: user.id,
+  email: user.email,
+  full_name: profile.full_name || user.user_metadata?.full_name || null,
+  avatar_url: profile.avatar_url || user.user_metadata?.avatar_url || null,
+  bio: profile.bio || null,
+  company: profile.company || null,
+  phone_number: profile.phone_number || null,
+  preferences: profile.preferences || {
+    notifications: true,
+    language: 'fr',
+    theme: 'light'
+  },
+  updated_at: new Date().toISOString()
+})
+
 // User profile operations
 export const usersApi = {
-  // Récupérer le profil de l'utilisateur connecté
-  async getCurrentProfile() {
+  async ensureProfile() {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
 
-    const { data, error } = await supabase
+    const { data: existingProfile, error: fetchError } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.id)
+      .maybeSingle()
+
+    if (fetchError) throw fetchError
+
+    if (existingProfile) {
+      return existingProfile
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .upsert(buildProfilePayload(user), { onConflict: 'id' })
+      .select()
       .single()
 
     if (error) throw error
     return data
   },
 
+  // Récupérer le profil de l'utilisateur connecté
+  async getCurrentProfile() {
+    return this.ensureProfile()
+  },
+
   // Mettre à jour le profil utilisateur
   async updateProfile(updates) {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
+
+    await this.ensureProfile()
 
     const { data, error } = await supabase
       .from('users')
@@ -41,6 +75,8 @@ export const usersApi = {
   async updateAvatar(file) {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
+
+    await this.ensureProfile()
 
     // Générer un nom de fichier unique
     const fileExt = file.name.split('.').pop()
@@ -76,11 +112,7 @@ export const usersApi = {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
 
-    const { data: currentUser } = await supabase
-      .from('users')
-      .select('preferences')
-      .eq('id', user.id)
-      .single()
+    const currentUser = await this.ensureProfile()
 
     const mergedPreferences = {
       ...currentUser?.preferences,

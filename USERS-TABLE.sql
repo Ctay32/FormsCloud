@@ -21,6 +21,18 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferences jsonb DEFAULT '{
+  "notifications": true,
+  "language": "fr",
+  "theme": "light"
+}'::jsonb;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL;
+
 -- Index pour améliorer les performances
 CREATE INDEX IF NOT EXISTS users_email_idx ON users(email);
 CREATE INDEX IF NOT EXISTS users_created_at_idx ON users(created_at);
@@ -31,6 +43,10 @@ RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO public.users (id, email, full_name, created_at, updated_at)
   VALUES (new.id, new.email, new.raw_user_meta_data->>'full_name', now(), now());
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      full_name = COALESCE(EXCLUDED.full_name, public.users.full_name),
+      updated_at = now();
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -112,6 +128,18 @@ FROM users u
 WHERE u.id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER;
 
+
+-- Link forms, questions and responses to authenticated users
+ALTER TABLE forms ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_forms_user_id ON forms(user_id);
+
+-- Link users table to questions and responses
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE responses ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+
+-- Drop requests and replies tables
+DROP TABLE IF EXISTS requests;
+DROP TABLE IF EXISTS replies;
 
 -- ✅ Table users créée avec succès!
 SELECT 'SUCCESS: Users table created with triggers and RLS policies configured!' as "Status";

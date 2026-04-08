@@ -139,9 +139,10 @@ export default function ShareModal({ form, isOpen, onClose }) {
     alert('Lien copié dans le presse-papiers !')
   }
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const formUrl = customUrl 
-    ? `${window.location.origin}/${customUrl}`
-    : `${window.location.origin}/form/${form?.id}`
+    ? `${origin}/${customUrl}`
+    : `${origin}/form/${form?.id}`
 
   if (!isOpen || !form) return null
 
@@ -211,7 +212,7 @@ export default function ShareModal({ form, isOpen, onClose }) {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {window.location.origin}/[votre-url]
+                  {origin || 'https://votre-domaine.com'}/[votre-url]
                 </p>
               </div>
 

@@ -1,11 +1,26 @@
 -- Création des tables pour FormCloud
 -- Exécutez ce SQL dans l'éditeur Supabase
 
+-- Table des profils utilisateurs
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  company TEXT,
+  phone_number TEXT,
+  preferences JSONB DEFAULT '{"notifications": true, "language": "fr", "theme": "light"}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Table des formulaires
 CREATE TABLE IF NOT EXISTS forms (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title VARCHAR(255) NOT NULL,
   description TEXT,
+  user_id UUID REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -20,6 +35,7 @@ CREATE TABLE IF NOT EXISTS questions (
   required BOOLEAN DEFAULT FALSE,
   options JSONB, -- Pour stocker les options des questions à choix
   settings JSONB, -- Pour stocker les paramètres avancés (échelle, grilles, etc.)
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -27,6 +43,7 @@ CREATE TABLE IF NOT EXISTS questions (
 CREATE TABLE IF NOT EXISTS responses (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   form_id UUID REFERENCES forms(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -41,8 +58,11 @@ CREATE TABLE IF NOT EXISTS response_details (
 
 -- Index pour améliorer les performances
 CREATE INDEX IF NOT EXISTS idx_forms_created_at ON forms(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_forms_user_id ON forms(user_id);
 CREATE INDEX IF NOT EXISTS idx_questions_form_id ON questions(form_id);
+CREATE INDEX IF NOT EXISTS idx_questions_user_id ON questions(user_id);
 CREATE INDEX IF NOT EXISTS idx_responses_form_id ON responses(form_id);
+CREATE INDEX IF NOT EXISTS idx_responses_user_id ON responses(user_id);
 CREATE INDEX IF NOT EXISTS idx_response_details_response_id ON response_details(response_id);
 
 -- RLS (Row Level Security) - Activer la sécurité

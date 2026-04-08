@@ -8,20 +8,48 @@ export const formsApi = {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
 
-    const { data, error } = await supabase
+    const { data: forms, error } = await supabase
       .from('forms')
-      .select(`
-        *,
-        questions(count),
-        responses(count)
-      `)
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
     
     if (error) throw error
-    return data.map(form => ({
+
+    if (!forms || forms.length === 0) {
+      return []
+    }
+
+    const formIds = forms.map((form) => form.id)
+
+    const [questionsResult, responsesResult] = await Promise.all([
+      supabase
+        .from('questions')
+        .select('id, form_id')
+        .in('form_id', formIds),
+      supabase
+        .from('responses')
+        .select('id, form_id')
+        .in('form_id', formIds)
+    ])
+
+    if (questionsResult.error) throw questionsResult.error
+    if (responsesResult.error) throw responsesResult.error
+
+    const questionCounts = (questionsResult.data || []).reduce((counts, question) => {
+      counts[question.form_id] = (counts[question.form_id] || 0) + 1
+      return counts
+    }, {})
+
+    const responseCounts = (responsesResult.data || []).reduce((counts, response) => {
+      counts[response.form_id] = (counts[response.form_id] || 0) + 1
+      return counts
+    }, {})
+
+    return forms.map(form => ({
       ...form,
-      responses: form.responses?.length || 0,
+      questionsCount: questionCounts[form.id] || 0,
+      responses: responseCounts[form.id] || 0,
       date: new Date(form.created_at).toLocaleDateString('fr-FR')
     }))
   },
@@ -73,7 +101,8 @@ export const formsApi = {
             text: question.text,
             type: question.type || 'short_answer',
             order_index: index,
-            required: question.required || false
+            required: question.required || false,
+            user_id: user.id
           }
           
           // Ajouter les options si elles existent
@@ -132,10 +161,15 @@ export const formsApi = {
 export const responsesApi = {
   // Soumettre une réponse (publique - tout le monde peut répondre)
   async submit(formId, answers) {
+    const user = await auth.getCurrentUser()
+
     // Créer la réponse principale
     const { data: response, error: responseError } = await supabase
       .from('responses')
-      .insert([{ form_id: formId }])
+      .insert([{
+        form_id: formId,
+        user_id: user?.id || null
+      }])
       .select()
       .single()
     

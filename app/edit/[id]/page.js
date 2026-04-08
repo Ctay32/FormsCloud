@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import AdvancedQuestionInput from '../../components/AdvancedQuestionInput'
 import Link from 'next/link'
 import { formsApi } from '../../lib/api'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 
-export default function EditFormPage({ params }) {
+export default function EditFormPage() {
+  const params = useParams()
+  const formId = Array.isArray(params?.id) ? params.id[0] : params?.id
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [questions, setQuestions] = useState([])
@@ -24,17 +26,21 @@ export default function EditFormPage({ params }) {
   const router = useRouter()
 
   useEffect(() => {
+    if (!formId) {
+      return
+    }
+
     loadForm()
-  }, [params.id])
+  }, [formId])
 
   const loadForm = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      console.log('EDIT: Chargement du formulaire pour édition:', params.id)
+      console.log('EDIT: Chargement du formulaire pour édition:', formId)
       
-      const formData = await formsApi.getById(params.id)
+      const formData = await formsApi.getById(formId)
       console.log('EDIT: Données du formulaire chargé:', JSON.stringify(formData, null, 2))
       
       setTitle(formData.title || '')
@@ -127,7 +133,7 @@ export default function EditFormPage({ params }) {
 
       console.log('EDIT: Données à envoyer à l\'API:', JSON.stringify(updateData, null, 2))
       
-      await formsApi.update(params.id, updateData)
+      await formsApi.update(formId, updateData)
       
       console.log('EDIT: Formulaire mis à jour avec succès')
       

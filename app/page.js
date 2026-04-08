@@ -1,293 +1,313 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import FormCard from './components/FormCard'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { formsApi, responsesApi } from './lib/api'
 import { useRouter } from 'next/navigation'
-import { auth } from './lib/auth'
-import UserProfile from './components/UserProfile'
 import ShareModal from './components/ShareModal'
+import { auth } from './lib/auth'
+import { formsApi } from './lib/api'
 
+export default function Page() {
+  const router = useRouter()
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState('date-desc')
   const [shareModal, setShareModal] = useState({ isOpen: false, form: null })
-  const [user, setUser] = useState(null)
-  const router = useRouter();
 
   useEffect(() => {
-    // Écouter l'état d'authentification
-    let unsub = null;
-    const checkUser = async () => {
-      const currentUser = await auth.getCurrentUser();
-      setUser(currentUser);
-      if (currentUser) {
-        loadForms();
-      } else {
-        setLoading(false);
-        // Rediriger vers /auth si pas connecté
-        router.push('/auth');
-      }
-    };
-    checkUser();
-    // Écoute les changements d'auth
-    unsub = auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        loadForms();
-      } else {
-        setUser(null);
-        setForms([]);
-        setLoading(false);
-        router.push('/auth');
-      }
-    });
-    return () => {
-      if (unsub && unsub.data && unsub.data.subscription) {
-        unsub.data.subscription.unsubscribe();
-      }
-    };
-  }, []);
+    let isMounted = true
 
-  const loadForms = async () => {
-    try {
-      setLoading(true)
-      const data = await formsApi.getAll()
-      setForms(data)
-      setError(null)
-    } catch (err) {
-      if (err.message === 'Utilisateur non connecté') {
-        setError('Vous devez être connecté pour voir vos formulaires.')
-      } else {
-        console.error('Erreur lors du chargement des formulaires:', err)
-        setError('Impossible de charger les formulaires')
+    const init = async () => {
+      try {
+        const user = await auth.getCurrentUser()
+        if (!user) {
+          router.push('/auth')
+          return
+        }
+
+        const data = await formsApi.getAll()
+        if (isMounted) {
+          setForms(data)
+          setError(null)
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err.message || 'Impossible de charger les formulaires')
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
       }
-    } finally {
-      setLoading(false)
     }
-  }
+
+    init()
+
+    return () => {
+      isMounted = false
+    }
+  }, [router])
 
   const handleView = (formId) => {
-    window.open(`/form/${formId}`, '_blank')
-  }
-
-  const handleAnswers = (formId) => {
-    window.location.href = `/results/${formId}`
+    router.push(`/form/${formId}`)
   }
 
   const handleEdit = (formId) => {
-    window.location.href = `/edit/${formId}`
+    router.push(`/edit/${formId}`)
   }
 
-  const handleDelete = async (formId) => {
-    if (confirm('Êtes-vous sûr de vouloir supprimer ce formulaire ?')) {
-      try {
-        await formsApi.delete(formId)
-        loadForms() // Recharger la liste
-      } catch (err) {
-        console.error('Erreur lors de la suppression:', err)
-        setError('Impossible de supprimer le formulaire')
-      }
-    }
+  const handleAnswers = (formId) => {
+    router.push(`/results/${formId}`)
   }
 
   const handleShare = (form) => {
     setShareModal({ isOpen: true, form })
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center py-12">
-            <div className="w-8 h-8 border-2 border-rose border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">Chargement des formulaires...</p>
-          </div>
-        </div>
-      </div>
-    )
+  const handleDelete = async (formId) => {
+    const confirmed = window.confirm('Supprimer ce formulaire ?')
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await formsApi.delete(formId)
+      setForms((currentForms) => currentForms.filter((form) => form.id !== formId))
+    } catch (err) {
+      setError(err.message || 'Impossible de supprimer le formulaire')
+    }
   }
 
-  if (error) {
+  const filteredForms = forms.filter((form) => {
+    const haystack = `${form.title || ''} ${form.description || ''}`.toLowerCase()
+    return haystack.includes(searchTerm.toLowerCase())
+  })
+
+  const displayedForms = [...filteredForms].sort((left, right) => {
+    switch (sortBy) {
+      case 'date-asc':
+        return new Date(left.created_at) - new Date(right.created_at)
+      case 'title-asc':
+        return (left.title || '').localeCompare(right.title || '', 'fr')
+      case 'title-desc':
+        return (right.title || '').localeCompare(left.title || '', 'fr')
+      case 'responses-desc':
+        return (right.responses || 0) - (left.responses || 0)
+      case 'responses-asc':
+        return (left.responses || 0) - (right.responses || 0)
+      case 'date-desc':
+      default:
+        return new Date(right.created_at) - new Date(left.created_at)
+    }
+  })
+
+  const totalResponses = forms.reduce((sum, form) => sum + (form.responses || 0), 0)
+  const draftForms = forms.filter((form) => (form.responses || 0) === 0).length
+  const totalQuestions = forms.reduce((sum, form) => sum + (form.questionsCount || 0), 0)
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">{error}</h3>
-            <button
-              onClick={loadForms}
-              className="btn-primary"
-            >
-              Réessayer
-            </button>
-            {error === 'Vous devez être connecté pour voir vos formulaires.' ? (
-              <button
-                onClick={() => router.push('/auth')}
-                className="btn-primary"
-              >
-                Se connecter
-              </button>
-            ) : (
-              <button
-                onClick={loadForms}
-                className="btn-primary"
-              >
-                Réessayer
-              </button>
-            )}
-          </div>
-        </div>
+      <div className="mx-auto max-w-[1280px]">
+        <div className="card py-10 text-center text-gray-500">Chargement du tableau de bord...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8 flex justify-between items-start">
+    <>
+      <div className="mx-auto max-w-[1280px]">
+        <div className="mb-8 flex items-start justify-between gap-6 rounded-[28px] border border-gray-200 bg-white px-8 py-7 shadow-sm">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Mes formulaires
-            </h1>
-            <p className="text-gray-600">
-              Gérez tous vos formulaires et consultez les réponses
-            </p>
+            <h1 className="mb-2 text-3xl font-bold text-gray-900">Mes formulaires</h1>
+            <p className="text-gray-600">Gérez et suivez vos formulaires</p>
           </div>
-          <div className="flex items-center gap-4">
-            <Link href="/" className="btn-secondary text-sm px-4 py-2">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          <div className="hidden items-center gap-3 text-gray-500 sm:flex">
+            <button type="button" className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white transition-colors hover:bg-gray-50">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              Accueil
-            </Link>
-            <UserProfile />
-          </div>
-        </div>
-
-        {/* Add new form button */}
-        <div className="mb-8">
-          <Link href="/create">
-            <button className="btn-primary flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Nouveau formulaire
             </button>
-          </Link>
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-sm font-semibold text-gray-700">
+              {forms.length}
+            </div>
+          </div>
         </div>
 
-        {/* Forms grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {forms.map((form) => (
-            <div key={form.id} className="card">
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {form.title}
-                </h3>
-                <p className="text-gray-600 text-sm mb-4">
-                  {form.description}
-                </p>
-                <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                  <span>{form.date}</span>
-                  <span className="font-medium text-rose">
-                    {form.responses} réponse{form.responses > 1 ? 's' : ''}
-                  </span>
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mb-8 grid gap-5 xl:grid-cols-4">
+          <MetricCard label="Formulaires" value={forms.length} description="Total réel des formulaires créés" icon="document" />
+          <MetricCard label="Réponses totales" value={totalResponses} description="Somme réelle des lignes de réponses" icon="inbox" />
+          <MetricCard label="Sans réponse" value={draftForms} description="Formulaires sans réponse reçue" icon="info" />
+          <MetricCard label="Questions totales" value={totalQuestions} description="Nombre réel de questions publiées" icon="chat" />
+        </div>
+
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="w-full max-w-xl">
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z" />
+              </svg>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Rechercher un formulaire..."
+                className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-gray-900 focus:border-rose/40 focus:outline-none focus:ring-2 focus:ring-rose/40"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 self-end lg:self-auto">
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-900 focus:border-rose/40 focus:outline-none focus:ring-2 focus:ring-rose/40"
+            >
+              <option value="date-desc">Plus récents</option>
+              <option value="date-asc">Plus anciens</option>
+              <option value="title-asc">Titre A-Z</option>
+              <option value="title-desc">Titre Z-A</option>
+              <option value="responses-desc">Réponses décroissant</option>
+              <option value="responses-asc">Réponses croissant</option>
+            </select>
+            <div className="whitespace-nowrap text-sm text-gray-500">
+              {displayedForms.length} formulaire{displayedForms.length > 1 ? 's' : ''}
+            </div>
+          </div>
+        </div>
+
+        {displayedForms.length > 0 ? (
+          <div className="space-y-5">
+            {displayedForms.map((form) => (
+              <div key={form.id} className="card">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <div className="mb-2 flex flex-wrap items-center gap-3">
+                      <h3 className="text-xl font-semibold text-gray-900">{form.title}</h3>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${form.responses > 0 ? 'bg-rose/10 text-rose' : 'bg-gray-100 text-gray-700'}`}>
+                        {form.responses > 0 ? 'Actif' : 'Sans réponse'}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-sm text-gray-500">Créé le {form.date}</p>
+                    <p className="max-w-2xl text-sm text-gray-600">
+                      {form.description || 'Aucune description pour ce formulaire.'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 xl:justify-end">
+                    <button onClick={() => handleView(form.id)} className="btn-secondary px-4 py-2 text-sm">
+                      Voir
+                    </button>
+                    <button onClick={() => handleEdit(form.id)} className="btn-secondary px-4 py-2 text-sm">
+                      Modifier
+                    </button>
+                    <button onClick={() => handleAnswers(form.id)} className="btn-secondary px-4 py-2 text-sm">
+                      Réponses
+                    </button>
+                    <button onClick={() => handleShare(form)} className="btn-primary px-4 py-2 text-sm">
+                      Partager
+                    </button>
+                    <button onClick={() => handleDelete(form.id)} className="rounded-full bg-red-50 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-100">
+                      Supprimer
+                    </button>
+                  </div>
                 </div>
-                
-                {/* Actions */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleView(form.id)}
-                    className="btn-secondary text-xs px-3 py-1"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    Voir
-                  </button>
-                  
-                  <button
-                    onClick={() => handleShare(form)}
-                    className="btn-primary text-xs px-3 py-1"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684m0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684" />
-                    </svg>
-                    Partager
-                  </button>
-                  
-                  <button
-                    onClick={() => handleEdit(form.id)}
-                    className="btn-secondary text-xs px-3 py-1"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Modifier
-                  </button>
-                  
-                  <button
-                    onClick={() => handleAnswers(form.id)}
-                    className="btn-secondary text-xs px-3 py-1"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    Réponses
-                  </button>
-                  
-                  <button
-                    onClick={() => handleDelete(form.id)}
-                    className="bg-red-50 text-red-600 hover:bg-red-100 text-xs px-3 py-1 rounded-lg transition-colors"
-                  >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Supprimer
-                  </button>
+
+                <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <StatItem label="Questions" value={form.questionsCount || 0} />
+                  <StatItem label="Réponses" value={form.responses || 0} />
+                  <StatItem label="Création" value={form.date} />
+                  <StatItem label="Visibilité" value="Privé" />
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Empty state */}
-        {forms.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            ))}
+          </div>
+        ) : (
+          <div className="py-12 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+              <svg className="h-8 w-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Aucun formulaire
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Commencez par créer votre premier formulaire
-            </p>
+            <h3 className="mb-2 text-lg font-medium text-gray-900">Aucun formulaire</h3>
+            <p className="mb-4 text-gray-600">Commencez par créer votre premier formulaire</p>
             <Link href="/create">
-              <button className="btn-primary">
-                Créer un formulaire
-              </button>
+              <button className="btn-primary">Créer un formulaire</button>
             </Link>
           </div>
         )}
       </div>
 
-      {/* Share Modal */}
       <ShareModal
-        form={shareModal.form}
         isOpen={shareModal.isOpen}
+        form={shareModal.form}
         onClose={() => setShareModal({ isOpen: false, form: null })}
       />
+    </>
+  )
+}
+
+function MetricCard({ label, value, description, icon }) {
+  return (
+    <div className="card flex min-h-[168px] flex-col justify-between">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="mb-3 text-sm text-gray-500">{label}</div>
+          <div className="text-4xl font-bold text-gray-900">{value}</div>
+        </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 text-gray-700">
+          <MetricIcon type={icon} />
+        </div>
+      </div>
+      <div className="text-sm text-gray-500">{description}</div>
     </div>
+  )
+}
+
+function StatItem({ label, value }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="text-lg font-semibold text-gray-900">{value}</div>
+    </div>
+  )
+}
+
+function MetricIcon({ type }) {
+  if (type === 'inbox') {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V10a2 2 0 012-2h2m10 0V6a2 2 0 00-2-2H9a2 2 0 00-2 2v2m10 0H7" />
+      </svg>
+    )
+  }
+
+  if (type === 'info') {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  }
+
+  if (type === 'chat') {
+    return (
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
   )
 }

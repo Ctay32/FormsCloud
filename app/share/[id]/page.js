@@ -3,17 +3,25 @@
 import { useState, useEffect } from 'react'
 import { formsApi } from '../../lib/api'
 import { shareApi } from '../../lib/share'
+import { supabase } from '../../lib/supabase'
+import { useParams } from 'next/navigation'
 
-export default function SharePage({ params }) {
+export default function SharePage() {
+  const params = useParams()
+  const shareId = Array.isArray(params?.id) ? params.id[0] : params?.id
   const [form, setForm] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [shareSettings, setShareSettings] = useState(null)
 
   useEffect(() => {
+    if (!shareId) {
+      return
+    }
+
     loadFormByCustomUrl()
     trackShareView()
-  }, [params.id])
+  }, [shareId])
 
   const loadFormByCustomUrl = async () => {
     try {
@@ -22,7 +30,7 @@ export default function SharePage({ params }) {
       const { data: formByCustomUrl } = await supabase
         .from('forms')
         .select('*')
-        .eq('custom_url', params.id)
+        .eq('custom_url', shareId)
         .single()
 
       if (formByCustomUrl) {
@@ -32,7 +40,7 @@ export default function SharePage({ params }) {
       }
 
       // Si pas trouvé par URL personnalisée, essayer par ID
-      const { data: formById } = await formsApi.getById(params.id)
+      const formById = await formsApi.getById(shareId)
       if (formById) {
         setForm(formById)
         setShareSettings(formById.share_settings || {})
@@ -53,7 +61,7 @@ export default function SharePage({ params }) {
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       
       // Suivre la vue
-      await shareApi.trackFormAccess(params.id, sessionId)
+      await shareApi.trackFormAccess(shareId, sessionId)
       
       // Stocker le session ID pour suivre la soumission
       sessionStorage.setItem('form_session_id', sessionId)
@@ -66,7 +74,7 @@ export default function SharePage({ params }) {
     if (!form) return
     
     try {
-      await shareApi.shareOnSocial(params.id, platform, {
+      await shareApi.shareOnSocial(shareId, platform, {
         title: form.title,
         description: form.description
       })
@@ -85,7 +93,7 @@ export default function SharePage({ params }) {
     if (!form) return
     
     try {
-      const qrData = await shareApi.generateQRCode(params.id)
+      const qrData = await shareApi.generateQRCode(shareId)
       window.open(qrData.qrCodeUrl, '_blank')
     } catch (err) {
       console.error('Erreur lors de la génération du QR code:', err)

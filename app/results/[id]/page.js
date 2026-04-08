@@ -5,8 +5,11 @@ import AnswerList from '../../components/AnswerList'
 import FilterBox from '../../components/FilterBox'
 import Link from 'next/link'
 import { formsApi, responsesApi } from '../../lib/api'
+import { useParams } from 'next/navigation'
 
-export default function ResultsPage({ params }) {
+export default function ResultsPage() {
+  const params = useParams()
+  const formId = Array.isArray(params?.id) ? params.id[0] : params?.id
   const [form, setForm] = useState(null)
   const [answers, setAnswers] = useState([])
   const [filteredAnswers, setFilteredAnswers] = useState([])
@@ -18,8 +21,12 @@ export default function ResultsPage({ params }) {
   const [filterAnswer, setFilterAnswer] = useState('')
 
   useEffect(() => {
+    if (!formId) {
+      return
+    }
+
     loadData()
-  }, [params.id])
+  }, [formId])
 
   useEffect(() => {
     if (answers.length > 0) {
@@ -36,13 +43,13 @@ export default function ResultsPage({ params }) {
       setError(null)
       
       // Charger le formulaire
-      const formData = await formsApi.getById(params.id)
+      const formData = await formsApi.getById(formId)
       setForm(formData)
       
       // Charger les réponses et l'analyse
       const [responsesData, analysisData] = await Promise.all([
-        responsesApi.getByFormId(params.id),
-        responsesApi.getAnalysis(params.id)
+        responsesApi.getByFormId(formId),
+        responsesApi.getAnalysis(formId)
       ])
       
       setAnswers(responsesData)

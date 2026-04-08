@@ -3,27 +3,36 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { formsApi, responsesApi } from '../../lib/api'
+import { useParams, useRouter } from 'next/navigation'
 
-export default function FormPage({ params }) {
+export default function FormPage() {
+  const params = useParams()
+  const formId = Array.isArray(params?.id) ? params.id[0] : params?.id
+  const router = useRouter()
   const [form, setForm] = useState(null)
   const [answers, setAnswers] = useState({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [error, setError] = useState(null)
+  const [questionSort, setQuestionSort] = useState('order')
 
   useEffect(() => {
+    if (!formId) {
+      return
+    }
+
     loadForm()
-  }, [params.id])
+  }, [formId])
 
   const loadForm = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      console.log('Chargement du formulaire avec ID:', params.id)
+      console.log('Chargement du formulaire avec ID:', formId)
       
-      const formData = await formsApi.getById(params.id)
+      const formData = await formsApi.getById(formId)
       console.log('Données du formulaire reçues:', formData)
       
       setForm(formData)
@@ -49,6 +58,36 @@ export default function FormPage({ params }) {
     }))
   }
 
+  const getSortedQuestions = () => {
+    if (!form?.questions) {
+      return []
+    }
+
+    const sortedQuestions = [...form.questions]
+
+    switch (questionSort) {
+      case 'alphabetical':
+        sortedQuestions.sort((a, b) => a.text.localeCompare(b.text, 'fr'))
+        break
+      case 'required-first':
+        sortedQuestions.sort((a, b) => {
+          if (a.required === b.required) {
+            return (a.order_index || 0) - (b.order_index || 0)
+          }
+
+          return a.required ? -1 : 1
+        })
+        break
+      default:
+        sortedQuestions.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+        break
+    }
+
+    return sortedQuestions
+  }
+
+  const sortedQuestions = getSortedQuestions()
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -63,7 +102,7 @@ export default function FormPage({ params }) {
       setSubmitting(true)
       setError(null)
       
-      await responsesApi.submit(params.id, answers)
+      await responsesApi.submit(formId, answers)
       setIsSubmitted(true)
     } catch (err) {
       console.error('Erreur lors de la soumission:', err)
@@ -136,44 +175,85 @@ export default function FormPage({ params }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="mb-8 flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-rose/10 px-3 py-1 text-xs font-medium text-rose mb-3">
+              <span>{sortedQuestions.length} question{sortedQuestions.length > 1 ? 's' : ''}</span>
+              <span className="text-gray-300">•</span>
+              <span>{sortedQuestions.filter(question => question.required).length} obligatoire{sortedQuestions.filter(question => question.required).length > 1 ? 's' : ''}</span>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2 leading-tight">
               {form.title}
             </h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-base leading-7">
               {form.description}
             </p>
           </div>
-          <Link href="/" className="btn-secondary text-sm px-4 py-2 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            Retour à l'accueil
-          </Link>
+          <div className="flex flex-wrap gap-3 lg:max-w-md lg:justify-end">
+            <button
+              type="button"
+              onClick={() => router.push(`/edit/${formId}`)}
+              className="btn-secondary text-sm px-4 py-2"
+            >
+              Modifier
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/results/${formId}`)}
+              className="btn-secondary text-sm px-4 py-2"
+            >
+              Réponses
+            </button>
+            <Link href="/" className="btn-secondary text-sm px-4 py-2 flex items-center gap-2">
+              Retour au dashboard
+            </Link>
+          </div>
         </div>
 
-        {/* Error message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center">
-              <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-red-700">{error}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
+          <div>
+            <div className="mb-6 card">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Apercu du formulaire</h2>
+                  <p className="text-sm text-gray-600 mt-1">Triez les questions pour parcourir le contenu plus facilement.</p>
+                </div>
+                <div className="w-full sm:w-64">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tri des questions</label>
+                  <select
+                    value={questionSort}
+                    onChange={(e) => setQuestionSort(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose/50 focus:border-rose"
+                  >
+                    <option value="order">Ordre du formulaire</option>
+                    <option value="required-first">Obligatoires d'abord</option>
+                    <option value="alphabetical">Ordre alphabetique</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {console.log('Affichage du formulaire - form:', form)}
-          {console.log('Affichage - questions:', form?.questions)}
+            {/* Error message */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-red-700">{error}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {console.log('Affichage du formulaire - form:', form)}
+              {console.log('Affichage - questions:', form?.questions)}
           
-          {form && form.questions && form.questions.length > 0 ? (
-            form.questions.map((question) => {
+          {form && sortedQuestions.length > 0 ? (
+            sortedQuestions.map((question) => {
               console.log('Affichage de la question:', question)
               return (
             <div key={question.id} className="card">
@@ -454,7 +534,14 @@ export default function FormPage({ params }) {
           )}
 
           {/* Submit button */}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => router.push(`/edit/${formId}`)}
+              className="btn-secondary"
+            >
+              Modifier le formulaire
+            </button>
             <button
               type="submit"
               className="btn-primary flex items-center gap-2"
@@ -470,7 +557,52 @@ export default function FormPage({ params }) {
               )}
             </button>
           </div>
-        </form>
+            </form>
+          </div>
+
+          <aside className="space-y-4">
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Actions rapides</h3>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/edit/${formId}`)}
+                  className="w-full btn-secondary text-sm"
+                >
+                  Modifier
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/results/${formId}`)}
+                  className="w-full btn-secondary text-sm"
+                >
+                  Voir les réponses
+                </button>
+                <Link href="/" className="w-full btn-primary text-sm inline-flex items-center justify-center">
+                  Retour dashboard
+                </Link>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Resume</h3>
+              <div className="space-y-3 text-sm text-gray-600">
+                <div className="flex items-center justify-between">
+                  <span>Questions</span>
+                  <span className="font-semibold text-gray-900">{sortedQuestions.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Obligatoires</span>
+                  <span className="font-semibold text-gray-900">{sortedQuestions.filter(question => question.required).length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Type principal</span>
+                  <span className="font-semibold text-gray-900 capitalize">{sortedQuestions[0]?.type?.replace('_', ' ') || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   )
