@@ -6,9 +6,24 @@ export const superAdminApi = {
   // Vérifie si l'utilisateur est super admin
   async isSuperAdmin() {
     try {
-      const profile = await usersApi.getCurrentProfile()
-      return profile?.is_super_admin === true
+      const user = await auth.getCurrentUser()
+      if (!user) return false;
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_super_admin')
+        .eq('id', user.id)
+        .maybeSingle()
+        
+      if (error) {
+        console.error("Erreur check super admin:", error)
+        return false
+      }
+      
+      console.log("=== CHECK DB SUPER ADMIN ===", data)
+      return data?.is_super_admin === true
     } catch (e) {
+      console.error("Exception check super admin:", e)
       return false
     }
   },
