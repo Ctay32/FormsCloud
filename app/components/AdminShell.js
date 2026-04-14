@@ -86,23 +86,25 @@ export default function AdminShell({ children }) {
       <div className="min-h-screen bg-gray-50 lg:pl-[320px]">
         <aside className="hidden lg:flex fixed inset-y-4 left-4 w-[272px] rounded-[28px] border border-gray-200 bg-white shadow-sm z-40 overflow-hidden">
           <div className="flex h-full flex-col">
-            {/* Workspace Switcher tout en haut */}
-            <div className="border-b border-gray-200 px-5 py-4 bg-gray-50">
-              <div className="mb-2 text-xs font-semibold text-gray-500 tracking-wide uppercase">Espace de travail</div>
-              {loadingOrg ? (
-                <div className="animate-pulse h-8 bg-gray-200 rounded w-full mb-2" />
-              ) : (
-                <OrganizationSelector
-                  organizations={organizations}
-                  currentOrgId={currentOrgId}
-                  onChange={id => {
-                    setLoadingOrg(true)
-                    setCurrentOrgId(id)
-                    setTimeout(() => setLoadingOrg(false), 600) // Simule un chargement
-                  }}
-                />
-              )}
-            </div>
+            {/* Workspace Switcher tout en haut (caché pour les super admins) */}
+            {!isSuperAdmin && (
+              <div className="border-b border-gray-200 px-5 py-4 bg-gray-50">
+                <div className="mb-2 text-xs font-semibold text-gray-500 tracking-wide uppercase">Espace de travail</div>
+                {loadingOrg ? (
+                  <div className="animate-pulse h-8 bg-gray-200 rounded w-full mb-2" />
+                ) : (
+                  <OrganizationSelector
+                    organizations={organizations}
+                    currentOrgId={currentOrgId}
+                    onChange={id => {
+                      setLoadingOrg(true)
+                      setCurrentOrgId(id)
+                      setTimeout(() => setLoadingOrg(false), 600) // Simule un chargement
+                    }}
+                  />
+                )}
+              </div>
+            )}
             {/* Bloc info utilisateur et navigation */}
             <div className="border-b border-gray-200 px-5 py-6">
               <div className="flex items-start gap-3">
