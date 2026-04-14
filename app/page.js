@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import ShareModal from './components/ShareModal'
 import { auth } from './lib/auth'
 import { formsApi } from './lib/api'
+import { superAdminApi } from './lib/superAdminApi'
 
 export default function Page() {
   const router = useRouter()
@@ -24,6 +25,12 @@ export default function Page() {
         const user = await auth.getCurrentUser()
         if (!user) {
           router.push('/auth')
+          return
+        }
+
+        const isSuper = await superAdminApi.isSuperAdmin()
+        if (isSuper) {
+          router.replace('/super-admin')
           return
         }
 
