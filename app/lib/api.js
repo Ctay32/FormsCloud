@@ -1,27 +1,27 @@
 import { supabase } from './supabase.js'
 import { auth } from './auth.js'
+import { OrganizationContext } from '../components/AdminShell'
 
 // Form CRUD operations
 export const formsApi = {
   // Récupérer tous les formulaires de l'utilisateur connecté
-  async getAll() {
+  async getAll(organizationId = null) {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
 
-    const { data: forms, error } = await supabase
-      .from('forms')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-    
+    let query = supabase.from('forms').select('*')
+    if (organizationId && organizationId !== 'default') {
+      query = query.eq('organization_id', organizationId)
+    } else {
+      query = query.eq('user_id', user.id)
+    }
+    query = query.order('created_at', { ascending: false })
+    const { data: forms, error } = await query
     if (error) throw error
-
     if (!forms || forms.length === 0) {
       return []
     }
-
     const formIds = forms.map((form) => form.id)
-
     const [questionsResult, responsesResult] = await Promise.all([
       supabase
         .from('questions')
@@ -32,20 +32,16 @@ export const formsApi = {
         .select('id, form_id')
         .in('form_id', formIds)
     ])
-
     if (questionsResult.error) throw questionsResult.error
     if (responsesResult.error) throw responsesResult.error
-
     const questionCounts = (questionsResult.data || []).reduce((counts, question) => {
       counts[question.form_id] = (counts[question.form_id] || 0) + 1
       return counts
     }, {})
-
     const responseCounts = (responsesResult.data || []).reduce((counts, response) => {
       counts[response.form_id] = (counts[response.form_id] || 0) + 1
       return counts
     }, {})
-
     return forms.map(form => ({
       ...form,
       questionsCount: questionCounts[form.id] || 0,
@@ -74,23 +70,24 @@ export const formsApi = {
   },
 
   // Créer un nouveau formulaire pour l'utilisateur connecté
-  async create(formData) {
+  async create(formData, organizationId = null) {
     const user = await auth.getCurrentUser()
     if (!user) throw new Error('Utilisateur non connecté')
-
     // Créer le formulaire
+    const insertData = {
+      title: formData.title,
+      description: formData.description,
+      user_id: user.id
+    }
+    if (organizationId && organizationId !== 'default') {
+      insertData.organization_id = organizationId
+    }
     const { data: form, error: formError } = await supabase
       .from('forms')
-      .insert([{
-        title: formData.title,
-        description: formData.description,
-        user_id: user.id
-      }])
+      .insert([insertData])
       .select()
       .single()
-    
     if (formError) throw formError
-
     // Créer les questions
     if (formData.questions && formData.questions.length > 0) {
       const questionsData = formData.questions
@@ -104,13 +101,9 @@ export const formsApi = {
             required: question.required || false,
             user_id: user.id
           }
-          
-          // Ajouter les options si elles existent
           if (question.options && question.options.length > 0) {
             questionData.options = question.options
           }
-          
-          // Ajouter les settings pour les types avancés
           if (question.type === 'linear_scale') {
             questionData.settings = {
               scaleStart: question.scaleStart,
@@ -128,17 +121,13 @@ export const formsApi = {
               precision: question.precision
             }
           }
-          
           return questionData
         })
-
       const { error: questionsError } = await supabase
         .from('questions')
         .insert(questionsData)
-      
       if (questionsError) throw questionsError
     }
-
     return form
   },
 

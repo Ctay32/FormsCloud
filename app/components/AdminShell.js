@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, createContext } from 'react'
+import OrganizationSelector from './OrganizationSelector'
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { auth } from '../lib/auth'
 
-const ADMIN_PATHS = ['/', '/create', '/edit', '/results', '/form', '/diagnostic']
+const ADMIN_PATHS = ['/', '/create', '/edit', '/results', '/form', '/diagnostic', '/super-admin']
 
 const shouldShowAdminShell = (pathname) => {
   if (!pathname) {
@@ -15,27 +17,64 @@ const shouldShowAdminShell = (pathname) => {
   return ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))
 }
 
+
+
+// Contexte pour l'organisation courante
+export const OrganizationContext = createContext({ organizationId: null })
+
 export default function AdminShell({ children }) {
   const pathname = usePathname()
   const [userLabel, setUserLabel] = useState('Utilisateur')
+  const [organizations, setOrganizations] = useState([])
+  const [currentOrgId, setCurrentOrgId] = useState(null)
+  const [loadingOrg, setLoadingOrg] = useState(false)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
   useEffect(() => {
-    const loadUser = async () => {
+    const loadUserAndOrgs = async () => {
+      setLoadingOrg(true)
       const currentUser = await auth.getCurrentUser()
-
       if (!currentUser) {
         setUserLabel('Utilisateur')
+        setOrganizations([{ id: 'default', name: 'Personnel' }])
+        setCurrentOrgId('default')
+        setLoadingOrg(false)
         return
       }
-
       setUserLabel(
         currentUser.user_metadata?.full_name ||
         currentUser.email?.split('@')[0] ||
         'Utilisateur'
       )
+      try {
+        const isSuper = await import('../lib/superAdminApi').then(m => m.superAdminApi.isSuperAdmin())
+        setIsSuperAdmin(isSuper)
+      } catch (e) {
+        setIsSuperAdmin(false)
+      }
+      try {
+        const { data, error } = await import('../lib/supabase').then(m => m.supabase)
+          .from('memberships')
+          .select('organization_id, organizations(name)')
+          .eq('user_id', currentUser.id)
+        if (error || !data || data.length === 0) {
+          setOrganizations([{ id: 'default', name: 'Personnel' }])
+          setCurrentOrgId('default')
+        } else {
+          const orgs = [
+            { id: 'default', name: 'Personnel' },
+            ...data.map(m => ({ id: m.organization_id, name: m.organizations?.name || 'Équipe' }))
+          ]
+          setOrganizations(orgs)
+          setCurrentOrgId(orgs[0]?.id)
+        }
+      } catch {
+        setOrganizations([{ id: 'default', name: 'Personnel' }])
+        setCurrentOrgId('default')
+      }
+      setLoadingOrg(false)
     }
-
-    loadUser()
+    loadUserAndOrgs()
   }, [pathname])
 
   if (!shouldShowAdminShell(pathname)) {
@@ -43,27 +82,52 @@ export default function AdminShell({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 lg:pl-[320px]">
-      <aside className="hidden lg:flex fixed inset-y-4 left-4 w-[272px] rounded-[28px] border border-gray-200 bg-white shadow-sm z-40 overflow-hidden">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-gray-200 px-5 py-6">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose text-white text-lg font-bold shadow-sm">
-                F
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose/80 mb-1">
-                  Administration
+    <OrganizationContext.Provider value={{ organizationId: currentOrgId }}>
+      <div className="min-h-screen bg-gray-50 lg:pl-[320px]">
+        <aside className="hidden lg:flex fixed inset-y-4 left-4 w-[272px] rounded-[28px] border border-gray-200 bg-white shadow-sm z-40 overflow-hidden">
+          <div className="flex h-full flex-col">
+            {/* Workspace Switcher tout en haut */}
+            <div className="border-b border-gray-200 px-5 py-4 bg-gray-50">
+              <div className="mb-2 text-xs font-semibold text-gray-500 tracking-wide uppercase">Espace de travail</div>
+              {loadingOrg ? (
+                <div className="animate-pulse h-8 bg-gray-200 rounded w-full mb-2" />
+              ) : (
+                <OrganizationSelector
+                  organizations={organizations}
+                  currentOrgId={currentOrgId}
+                  onChange={id => {
+                    setLoadingOrg(true)
+                    setCurrentOrgId(id)
+                    setTimeout(() => setLoadingOrg(false), 600) // Simule un chargement
+                  }}
+                />
+              )}
+            </div>
+            {/* Bloc info utilisateur et navigation */}
+            <div className="border-b border-gray-200 px-5 py-6">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose text-white text-lg font-bold shadow-sm">
+                  F
                 </div>
-                <div className="text-xl font-bold text-gray-900 leading-tight">
-                  FormCloud
-                </div>
-                <div className="text-sm text-gray-500 mt-1 truncate max-w-[180px]">
-                  {userLabel}
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose/80 mb-1">
+                    Administration
+                  </div>
+                  <div className="text-xl font-bold text-gray-900 leading-tight">
+                    FormCloud
+                  </div>
+                  <div className="text-sm text-gray-500 mt-1 truncate max-w-[180px]">
+                    {userLabel}
+                  </div>
                 </div>
               </div>
             </div>
+            {/* ...existing code... */}
           </div>
+        </aside>
+        {/* ...existing code... */}
+      </div>
+    </OrganizationContext.Provider>
 
           <nav className="flex-1 px-4 py-5 space-y-2">
             <Link
@@ -84,6 +148,17 @@ export default function AdminShell({ children }) {
               </svg>
               Nouveau formulaire
             </Link>
+            {isSuperAdmin && (
+              <Link
+                href="/super-admin"
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${pathname.startsWith('/super-admin') ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-900 hover:bg-purple-50'}`}
+              >
+                <svg className="h-4 w-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Super Admin
+              </Link>
+            )}
             <button
               type="button"
               className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-gray-900 transition-colors hover:bg-gray-100"
