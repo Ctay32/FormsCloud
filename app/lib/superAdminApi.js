@@ -76,7 +76,7 @@ export const superAdminApi = {
     await this.requireSuperAdmin()
     const { data: forms, error } = await supabase
       .from('forms')
-      .select('id, title, user_id, organization_id, created_at, users(email), organizations(name)')
+      .select('id, title, user_id, organization_id, created_at, organizations(name)')
       .order('created_at', { ascending: false })
     if (error) throw error
     
@@ -96,10 +96,17 @@ export const superAdminApi = {
       return acc
     }, {})
 
+    // Récupérer les emails des utilisateurs pour éviter l'erreur de jointure Supabase
+    const { data: allUsers } = await supabase.from('users').select('id, email')
+    const userEmailMap = (allUsers || []).reduce((acc, u) => {
+      acc[u.id] = u.email
+      return acc
+    }, {})
+
     return forms.map(f => ({
       ...f,
       responsesCount: countMap[f.id] || 0,
-      userName: f.users?.email || 'Inconnu',
+      userName: userEmailMap[f.user_id] || 'Inconnu',
       orgName: f.organizations?.name || 'Aucune'
     }))
   },

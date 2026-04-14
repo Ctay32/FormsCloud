@@ -122,13 +122,6 @@ export default function AdminShell({ children }) {
                 </div>
               </div>
             </div>
-            {/* ...existing code... */}
-          </div>
-        </aside>
-        {/* ...existing code... */}
-      </div>
-    </OrganizationContext.Provider>
-
           <nav className="flex-1 px-4 py-5 space-y-2">
             {!isSuperAdmin ? (
               <>
@@ -211,5 +204,6 @@ export default function AdminShell({ children }) {
         {children}
       </main>
     </div>
+    </OrganizationContext.Provider>
   )
 }
